@@ -23,65 +23,6 @@
 #define ASPAS_DUPLAS 34
 #define ASPAS_SIMPLES 39
 
-
-
-/*
-CRIAR UMA FUNÇAO PARA GERAR OS PROGRAMAS
-*/
-
-//getline
-char **get_lines()
-{
-	//capturar linhas
-	
-	size_t len = 0;
-	ssize_t nread;
-	char *line = NULL;
-
-	char **v;
-
-	int quant_lines = MAX_QUANT_LINES;
-
-	v = malloc(quant_lines*sizeof(char*));
-	int i = 0 ;
-
-	while ((nread = getline(&line, &len, stdin)) != -1 && i < 1) 
-	{
-	   //printf("Retrieved line of length %zu:\n", nread);
-		//tirando o \n do final
-		line[nread-1]='\0';
-
-	   //fwrite(line, nread, 1, stdout);
-		if(feof(stdin))
-		{
-			return v;
-		}
-
-		if(i == quant_lines)
-		{
-			quant_lines += MAX_QUANT_LINES;
-			v = realloc(v,quant_lines);
-		}		
-		v[i] = line;
-		
-		//printf("valor %d\n",i );
-		line = NULL;
-		i++;
-	}
-	/*
-	fwrite(v[0], nread,1,stdout);
-	fwrite(v[1], nread,1,stdout);
-	if(v[2]== NULL)
-	{
-		printf("V2 eh null\n");
-	}
-	*/
-
-	free(line);
-	return v;
-
-}
-
 char **separar_por_char(int *valor,char *line,char c)
 {
 	
@@ -89,10 +30,8 @@ char **separar_por_char(int *valor,char *line,char c)
 	int quant_tokens = MAX_QUANT_TOKENS;
 	tokens = malloc(quant_tokens * sizeof(char*));
 
-
 	char *str, *token;
 	char *saveptr;
-
 
 	int i;
 	for(i = 1, str = line;;i++,str = NULL)
@@ -261,19 +200,143 @@ char **separar_por_espaco(int *valor,char *line)
 	return tokens;
 }
 
-void mudar_stdin(char **in)
+void mudar_stdin(char in[])
 {
-	int entrada = open(in[0], O_RDONLY);	
+	int entrada = open(in, O_RDONLY);	
 	dup2(entrada, STDIN_FILENO);
 	close(entrada);
 }
 
-void mudar_stdout(char **out)
-{
-	
-	int saida = open(out[0], O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+void mudar_stdout(char out[])
+{	
+	int saida = open(out, O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
 	dup2(saida,STDOUT_FILENO);
 	close(saida);
+}
+
+char **separar_prog_in_out(char *palavra)
+{
+	char **subtokens_menor;
+	char **subtokens_maior;
+	
+	int qnt_subtokens_menor;
+	int qnt_subtokens_maior;
+
+	char *prog,*in,*out;
+
+	//verificar se tem menor
+	subtokens_menor = separar_por_char(&qnt_subtokens_menor,palavra,MENOR_QUE);
+	qnt_subtokens_menor--;
+
+	//se tiver menor
+	if(qnt_subtokens_menor)
+	{
+		//verificando se tem maior na esquerda
+		subtokens_maior = separar_por_char(&qnt_subtokens_maior,subtokens_menor[0],MAIOR_QUE);
+		qnt_subtokens_maior--;
+		if(qnt_subtokens_maior)
+		{
+			prog = subtokens_maior[0];
+			in = subtokens_menor[1];
+			out = subtokens_maior[1];
+		}
+		else
+		{
+			//verificando se tem maior na direita
+			subtokens_maior = separar_por_char(&qnt_subtokens_maior,subtokens_menor[1],MAIOR_QUE);
+			qnt_subtokens_maior--;
+			if(qnt_subtokens_maior)
+			{
+				prog = subtokens_menor[0];
+				in = subtokens_maior[0];
+				out = subtokens_maior[1];
+			}
+			else
+			{	
+				//senao, nao tem maior
+				prog = subtokens_menor[0];
+				in = subtokens_menor[1];
+				out = NULL;
+			}
+		}
+	}
+	else{
+		//se nao tiver menor, verifica o maior no tokens
+		subtokens_maior = separar_por_char(&qnt_subtokens_maior,palavra,MAIOR_QUE);
+		qnt_subtokens_maior--;
+		if(qnt_subtokens_maior)
+		{
+			prog = subtokens_maior[0];
+			in = NULL;
+			out = subtokens_maior[1];
+		}
+		else
+		{
+			prog = palavra;
+			in = NULL;
+			out = NULL;
+		}
+	}	
+	//eliminando espaço do in e out
+	char **esp1,**esp2;
+	int qtd_esp1,qtd_esp2;	
+	if(in != NULL)
+	{					
+		esp1 = separar_por_espaco(&qtd_esp1,in);					
+		in = esp1[0];
+	}
+	if(out != NULL)
+	{					
+		esp2 = separar_por_espaco(&qtd_esp2,out);	
+		out = esp2[0];
+	}
+
+	char **process;
+	process = malloc(3*sizeof(char*));
+	process[0] = prog;
+	process[1] = in;
+	process[2] = out;
+
+	return process;	
+}
+
+void launch_process(char *prog, char *in, char *out, int infile,int outfile,int errfile)
+{
+	char **v;
+	int qtd_parametros;
+	//linkando os pipes
+	if (infile != STDIN_FILENO)
+    {
+      	dup2 (infile, STDIN_FILENO);
+      	close (infile);
+    }
+  	if (outfile != STDOUT_FILENO)
+    {
+      	dup2 (outfile, STDOUT_FILENO);
+      	close (outfile);
+    }
+  	if (errfile != STDERR_FILENO)
+    {
+      	dup2 (errfile, STDERR_FILENO);
+      	close (errfile);
+    }
+    //executar o processo
+    v = separar_por_espaco(&qtd_parametros,prog);
+	if(in != NULL)
+	{					
+		mudar_stdin(in);
+	}
+	if(out != NULL)
+	{	
+		mudar_stdout(out);
+	}				
+	//pid_t filho = getpid();
+	// printf("pid filho: %d\n",filho);
+	// int ret = execve(v[0],v,NULL);
+	execve(v[0],v,0);
+	//execve certo, nao roda o "erro"
+	perror("execve");
+	printf("erro do execve\n");
 }
 
 int main()
@@ -283,13 +346,11 @@ int main()
 	
 	//variaveis
 	pid_t parent_pid = getpid();
-	pid_t wpid;
-	int status = 0;
+	
 
 	printf("Welcome to bash 2.0\n");
 	printf("pid da execução(pai): %d\n",getpid());
 
-	
 
 	char *line = NULL;
 	while (true)
@@ -315,130 +376,63 @@ int main()
 		char **tokens;
 		int qnt_tokens;
 		tokens = separar_por_char(&qnt_tokens,line,PIPE);
-		if(qnt_tokens > 1)
-		{
-			printf("teremos que fazer pipe\n");
-			
-		}
 		
 		//procurando por < e > para mudar o fd
 
+		pid_t pid;
+		int mypipe[2], infile=0, outfile=1,errfile = 2;
+		pid_t wpid;
+		int status = 0;
 		int i = 0;
 		while(tokens[i] != NULL)
-		{
-			char **subtokens_menor;
-			char **subtokens_maior;
-			
-			int qnt_subtokens_menor;
-			int qnt_subtokens_maior;
+		{			
+			char **process = separar_prog_in_out(tokens[i]);
 
-			char *prog,*in,*out;
+			char *prog, *in,*out;
+			prog = process[0];
+			in = process[1];
+			out = process[2];
 
 
-			//verificar se tem menor
-			subtokens_menor = separar_por_char(&qnt_subtokens_menor,tokens[i],MENOR_QUE);
-			qnt_subtokens_menor--;
-
-			//se tiver menor
-			if(qnt_subtokens_menor)
+			if(tokens[i+1] != NULL)//se existir proximo token, fazemos um pipe
 			{
-				//verificando se tem maior na esquerda
-				subtokens_maior = separar_por_char(&qnt_subtokens_maior,subtokens_menor[0],MAIOR_QUE);
-				qnt_subtokens_maior--;
-				if(qnt_subtokens_maior)
+				if(pipe(mypipe) < 0)
 				{
-					prog = subtokens_maior[0];
-					in = subtokens_menor[1];
-					out = subtokens_maior[1];
+					perror("pipe");
+					exit(1);
 				}
-				else
-				{
-					//verificando se tem maior na direita
-					subtokens_maior = separar_por_char(&qnt_subtokens_maior,subtokens_menor[1],MAIOR_QUE);
-					qnt_subtokens_maior--;
-					if(qnt_subtokens_maior)
-					{
-						prog = subtokens_menor[0];
-						in = subtokens_maior[0];
-						out = subtokens_maior[1];
-					}
-					else
-					{	
-						//senao, nao tem maior
-						prog = subtokens_menor[0];
-						in = subtokens_menor[1];
-						out = NULL;
-					}
-				}
+				outfile = mypipe[1];
 			}
-			else{
-				//se nao tiver menor, verifica o maior no tokens
-				subtokens_maior = separar_por_char(&qnt_subtokens_maior,tokens[i],MAIOR_QUE);
-				qnt_subtokens_maior--;
-				if(qnt_subtokens_maior)
-				{
-					prog = subtokens_maior[0];
-					in = NULL;
-					out = subtokens_maior[1];
-				}
-				else
-				{
-					prog = tokens[i];
-					in = NULL;
-					out = NULL;
-				}
-			}
-			//tirando os espaços			
-			char **v;
+			else
+				outfile = 1;
 
-			int qtd_parametros;
+			//Fork para executar processo
 
-			pid_t child_pid = fork();
-		
-			if(child_pid == 0) //quer dizer que é o filho
+			pid = fork();
+			if(pid == 0)//se for o filho, manda executar
 			{
-				v = separar_por_espaco(&qtd_parametros,prog);
-				char **esp1,**esp2;
-				int qtd_esp1,qtd_esp2;
-				if(in != NULL)
-				{
-					
-					esp1 = separar_por_espaco(&qtd_esp1,in);					
-					mudar_stdin(esp1);
-				}
-				if(out != NULL)
-				{
-					
-					esp2 = separar_por_espaco(&qtd_esp2,out);	
-					mudar_stdout(esp2);
-				}				
-				pid_t filho = getpid();
-				// printf("pid filho: %d\n",filho);
-				// int ret = execve(v[0],v,NULL);
-				execve(v[0],v,0);
-				//execve certo, nao roda o "erro"
-				perror("execve");
-				printf("erro do execve\n");
-				//close(filho);			
+				launch_process(prog,in,out, infile,outfile,errfile);
 			}
-			// getchar();
-			while ((wpid = wait(&status)) > 0);
-
+			else if(pid < 0)
+			{
+				perror("fork");
+				exit(1);
+			}
+			else //se for o pai
+			{
+				while ((wpid = wait(&status)) > 0);
+			}
+			//limpando os pipes
+			if (infile != 0)
+		        close (infile);
+		    if (outfile != 1)
+		        close (outfile);
+		    infile = mypipe[0];			
 			i++;
 		}
-
-
-
-		//printf("tokens: %d\n",qnt_tokens);
-
-
-
-		//
 		line = NULL;
 		
 	}
-
-
 	return 0;
 }
 
