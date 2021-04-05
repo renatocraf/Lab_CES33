@@ -1,9 +1,9 @@
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <sys/stat.h>
 #include <fcntl.h>
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,8 +12,8 @@
 #define true 1
 #define false 0
 
-#define MAX_LENGHT_PROG 1024
-#define MAX_QUANT_LINES 64
+// #define MAX_LENGHT_PROG 1024
+// #define MAX_QUANT_LINES 64
 #define MAX_QUANT_TOKENS 10
 
 #define PIPE 124
@@ -67,8 +67,6 @@ char **separar_por_espaco(int *valor,char *line)
 	while(line[len]!= '\0'){ len++;} //mais 1 pra o /0
 
 	char c = line[cont];
-	//printf("c: %c\n",c);
-
 	char *token;
 	token = malloc(len*sizeof(char));
 
@@ -95,11 +93,9 @@ char **separar_por_espaco(int *valor,char *line)
 
 	while(cont < len)
 	{
-		//printf("iteraçao: %d c: %d\n", cont,c );
 		if ((c == ASPAS_DUPLAS && aspas_dup == false )||(c == ASPAS_SIMPLES && aspas_sim == false))
 		//acaba palavra sem aspas, entao verifica espacos e cria vetor
 		{
-			//printf("abriu aspas\n");
 			if(c == ASPAS_DUPLAS)
 				aspas_dup = true;
 			else
@@ -120,10 +116,8 @@ char **separar_por_espaco(int *valor,char *line)
 				}
 
 				tokens[i] = grupo1[k];
-				//printf("token encontrado: %s\n",tokens[i]);
 				i++;
 				k++;
-
 			}
 			//reseta token
 			j = 0;
@@ -134,7 +128,6 @@ char **separar_por_espaco(int *valor,char *line)
 		else if((c == ASPAS_DUPLAS && aspas_dup == true)||(c == ASPAS_SIMPLES && aspas_sim == true))
 		//se for fechamento de aspas, ja insere o token de vez
 		{
-			//printf("fechou aspas\n");
 			if(c == ASPAS_DUPLAS)
 				aspas_dup = false;
 			else
@@ -147,7 +140,6 @@ char **separar_por_espaco(int *valor,char *line)
 				}
 			token[j] = '\0';
 			tokens[i] = token;
-			//printf("token encontrado: %s\n",tokens[i] );
 			i++;
 			//reseta token
 			j = 0;
@@ -157,15 +149,12 @@ char **separar_por_espaco(int *valor,char *line)
 		}
 		else
 		{
-			//printf("nao foi aspas\n");
 			token[j]= c;
-			//printf("%s\n",token );
 			j++;
 		}
 
 		cont++;
 		c = line[cont];
-		//printf("c: %c c_num:%d\n",c,c );
 		if(c == '\0' || len == cont)
 		{
 			token[j] = '\0';
@@ -179,12 +168,10 @@ char **separar_por_espaco(int *valor,char *line)
 				if(i > quant_tokens)
 				{
 					quant_tokens += MAX_QUANT_TOKENS;
-					//printf("%d\n",quant_tokens );
 					tokens = realloc(tokens,quant_tokens * sizeof(char*));
 				}
 
 				tokens[i] = grupo1[k];
-				//printf("token encontrado: %s\n",tokens[i]);
 				i++;
 				k++;
 
@@ -193,8 +180,6 @@ char **separar_por_espaco(int *valor,char *line)
 			j = 0;
 			token = NULL;
 		}
-		
-
 	}	
 	
 	return tokens;
@@ -202,7 +187,12 @@ char **separar_por_espaco(int *valor,char *line)
 
 void mudar_stdin(char in[])
 {
-	int entrada = open(in, O_RDONLY);	
+	int entrada = open(in, O_RDONLY);
+	if (entrada <0)
+	{
+		perror("open");
+		exit(2);
+	}	
 	dup2(entrada, STDIN_FILENO);
 	close(entrada);
 }
@@ -348,8 +338,9 @@ int main()
 	pid_t parent_pid = getpid();
 	
 
-	printf("Welcome to bash 2.0\n");
-	printf("pid da execução(pai): %d\n",getpid());
+	printf("CES-33 Minishell Project\n");
+	printf("Aluno: Carlos Renato de Andrade Figueiredo - T22\n\n");
+	//printf("pid da execução(pai): %d\n",getpid());
 
 
 	char *line = NULL;
@@ -361,8 +352,7 @@ int main()
 		//variaveis do bash
 		size_t len = 0;
 		ssize_t nread;
-		
-		
+				
 		//pegando a linha
 		nread = getline(&line, &len, stdin);
 		//NREAD == -1 -> ERRO!! TRATAR
@@ -377,8 +367,6 @@ int main()
 		int qnt_tokens;
 		tokens = separar_por_char(&qnt_tokens,line,PIPE);
 		
-		//procurando por < e > para mudar o fd
-
 		pid_t pid;
 		int mypipe[2], infile=0, outfile=1,errfile = 2;
 		pid_t wpid;
@@ -421,6 +409,7 @@ int main()
 			else //se for o pai
 			{
 				while ((wpid = wait(&status)) > 0);
+				//wait(&status);
 			}
 			//limpando os pipes
 			if (infile != 0)
